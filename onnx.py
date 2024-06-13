@@ -233,7 +233,7 @@ if __name__ == "__main__":
     # Create an argument parser to handle command-line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, default="yolov8n.onnx", help="Input your ONNX model.")
-    parser.add_argument("--img", type=str, required=True, help="Path to input image.")
+    #parser.add_argument("--img", type=str, required=True, help="Path to input image.")
     parser.add_argument("--conf-thres", type=float, default=0.5, help="Confidence threshold")
     parser.add_argument("--iou-thres", type=float, default=0.5, help="NMS IoU threshold")
     args = parser.parse_args()
@@ -242,33 +242,42 @@ if __name__ == "__main__":
     #check_requirements("onnxruntime-gpu" if torch.cuda.is_available() else "onnxruntime")
 
     # Create an instance of the YOLOv8 class with the specified arguments
-    detection = YOLOv8(args.model, args.img, args.conf_thres, args.iou_thres)
-    detection.preload()
 
     #img = cv2.imread(args.img)
-    cap = cv2.VideoCapture(args.img)
+    with open('secrets.txt', 'r') as f:
+        secrets = f.readline()
+    cap = cv2.VideoCapture(f'rtspsrc location=rtsp://wb:{secrets} ! rtpjitterbuffer ! rtph264depay ! h264parse ! openh264dec ! videoconvert ! video/x-raw, format=(string)BGR ! appsink', cv2.CAP_GSTREAMER)
     ret, img = cap.read()
     count = 0
     csv = open('det.csv', 'w')
 
+    print(img.shape)
+
+    detection = YOLOv8(args.model, img, args.conf_thres, args.iou_thres)
+    detection.preload()
+
+    count = 0
+
     while ret:
-        start = time.time()
-        # Perform object detection and obtain the output image
-        output_image, detections, diffs = detection.detect(img)
-        stop = time.time()
-        diff = stop - start
-        #print(f'Inference time: {diff:0.3f}')
-        print(diffs)
-        csv.write(f'{time.time()}, {str(detections)}\n')
+        count += 1
+        if count >= 30:
+            count = 0
+            start = time.time()
+            # Perform object detection and obtain the output image
+            output_image, detections, diffs = detection.detect(img)
+            stop = time.time()
+            diff = stop - start
+            print(diffs)
+            csv.write(f'{time.time()}, {str(detections)}\n')
 
-        # Display the output image in a window
-        cv2.namedWindow("Output", cv2.WINDOW_NORMAL)
-        cv2.imshow("Output", output_image)
+            # Display the output image in a window
+            cv2.namedWindow("Output", cv2.WINDOW_NORMAL)
+            cv2.imshow("Output", output_image)
 
-        # Wait for a key press to exit
-        key = cv2.waitKey(1)
-        if key == ord('q'):
-            ret = False
+            # Wait for a key press to exit
+            key = cv2.waitKey(1)
+            if key == ord('q'):
+                ret = False
 
         ret, img = cap.read()
 
